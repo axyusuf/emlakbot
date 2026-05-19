@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmlakBot — Geceleri de satıyor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-start: #1a1a2e;
+    --bg-end: #16213e;
+    --green: #27ae60;
+    --gold: #f0c040;
+    --accent: #0f3460;
+    --card-bg: rgba(255,255,255,0.06);
+    --card-border: rgba(255,255,255,0.12);
+    --text: #ffffff;
+    --muted: rgba(255,255,255,0.65);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-start);
+    color: var(--text);
+    user-select: none;
+  }
+
+  /* ── SLIDE CONTAINER ── */
+  #deck {
+    position: relative;
+    width: 100vw; height: 100vh;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 60px 80px;
+    background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 60%, #0f3460 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.55s ease, transform 0.55s ease;
+    transform: translateX(60px);
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1; pointer-events: all; transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0; transform: translateX(-60px);
+  }
+
+  /* ── DECORATIVE BLOBS ── */
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .blob-1 { width: 500px; height: 500px; background: rgba(39,174,96,0.08); top: -120px; right: -100px; }
+  .blob-2 { width: 400px; height: 400px; background: rgba(15,52,96,0.6); bottom: -100px; left: -80px; }
+
+  /* ── TYPOGRAPHY ── */
+  .slide > * { position: relative; z-index: 1; }
+
+  .tag {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--green);
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    font-weight: 800; line-height: 1.1;
+    text-align: center; margin-bottom: 20px;
+  }
+  h2 {
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    font-weight: 700; line-height: 1.2;
+    text-align: center; margin-bottom: 12px;
+  }
+  h3 {
+    font-size: 1.1rem; font-weight: 700; margin-bottom: 8px;
+  }
+
+  .highlight { color: var(--green); }
+  .gold      { color: var(--gold); }
+
+  .subtitle {
+    font-size: clamp(1rem, 2vw, 1.3rem);
+    color: var(--muted); text-align: center;
+    max-width: 720px; line-height: 1.6; margin-bottom: 24px;
+  }
+
+  /* ── GRID HELPERS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 960px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; max-width: 1060px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; max-width: 1060px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 24px 20px;
+    transition: transform 0.2s;
+  }
+  .card:hover { transform: translateY(-3px); }
+
+  .card .icon {
+    font-size: 2rem; margin-bottom: 12px; display: block;
+  }
+  .card p { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+
+  /* ── PAIN CARDS ── */
+  .pain-card {
+    background: rgba(231,76,60,0.1);
+    border: 1px solid rgba(231,76,60,0.3);
+    border-radius: 14px;
+    padding: 22px 20px;
+  }
+  .pain-card .icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+  .pain-card h3 { color: #e74c3c; }
+  .pain-card p  { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex; align-items: center; gap: 0;
+    flex-wrap: wrap; justify-content: center;
+    width: 100%; max-width: 1000px;
+  }
+  .flow-step {
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 18px 16px; min-width: 140px; text-align: center;
+  }
+  .flow-step .icon { font-size: 1.8rem; margin-bottom: 8px; }
+  .flow-step span { font-size: 0.8rem; color: var(--muted); }
+  .flow-step strong { font-size: 0.9rem; display: block; margin-bottom: 4px; }
+  .flow-arrow {
+    font-size: 1.6rem; color: var(--green); padding: 0 8px; font-weight: 700;
+  }
+
+  /* ── CRM TABLE ── */
+  .crm-table {
+    width: 100%; max-width: 900px;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  .crm-table th {
+    background: rgba(39,174,96,0.15);
+    color: var(--green); text-align: left;
+    padding: 10px 14px; font-size: 0.78rem;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .crm-table td {
+    padding: 10px 14px; border-bottom: 1px solid var(--card-border);
+    color: var(--text);
+  }
+  .crm-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .badge-new      { background: rgba(39,174,96,0.2);  color: #27ae60; border: 1px solid #27ae60; }
+  .badge-called   { background: rgba(52,152,219,0.2); color: #3498db; border: 1px solid #3498db; }
+  .badge-meeting  { background: rgba(155,89,182,0.2); color: #9b59b6; border: 1px solid #9b59b6; }
+  .badge-sale     { background: rgba(240,192,64,0.2); color: var(--gold); border: 1px solid var(--gold); }
+  .badge-lost     { background: rgba(231,76,60,0.2);  color: #e74c3c; border: 1px solid #e74c3c; }
+
+  /* ── PRICING ── */
+  .price-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px; padding: 32px 24px;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center; position: relative;
+  }
+  .price-card.featured {
+    border-color: var(--green);
+    background: rgba(39,174,96,0.08);
+    transform: scale(1.04);
+  }
+  .price-badge {
+    position: absolute; top: -12px;
+    background: var(--green); color: #fff;
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 1px;
+    padding: 4px 14px; border-radius: 20px; text-transform: uppercase;
+  }
+  .price-card h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--muted); }
+  .price-amount  { font-size: 2.4rem; font-weight: 800; color: var(--green); line-height: 1; }
+  .price-period  { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+  .price-features { list-style: none; text-align: left; width: 100%; }
+  .price-features li {
+    font-size: 0.82rem; padding: 5px 0;
+    border-bottom: 1px solid var(--card-border);
+    color: var(--muted);
+  }
+  .price-features li::before { content: "✓  "; color: var(--green); font-weight: 700; }
+
+  /* ── ROI TABLE ── */
+  .roi-box {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 28px 32px;
+    max-width: 900px; width: 100%;
+  }
+  .roi-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--card-border);
+    font-size: 0.95rem;
+  }
+  .roi-row:last-child { border-bottom: none; }
+  .roi-row .lbl { color: var(--muted); }
+  .roi-row .val { font-weight: 700; font-size: 1.1rem; }
+  .roi-row.total .lbl { color: var(--text); font-weight: 700; font-size: 1rem; }
+  .roi-row.total .val { color: var(--green); font-size: 1.5rem; }
+
+  /* ── TESTIMONIALS ── */
+  .testimonial {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 24px 22px;
+  }
+  .testimonial .quote { font-size: 0.95rem; font-style: italic; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+  .testimonial .quote::before { content: "\201C"; color: var(--green); font-size: 1.4rem; font-style: normal; }
+  .testimonial .quote::after  { content: "\201D"; color: var(--green); font-size: 1.4rem; font-style: normal; }
+  .testimonial .author { font-size: 0.82rem; font-weight: 700; color: var(--green); }
+  .testimonial .role   { font-size: 0.75rem; color: var(--muted); }
+  .stars { color: var(--gold); font-size: 1rem; margin-bottom: 10px; }
+
+  /* ── CTA ── */
+  .cta-btn {
+    display: inline-block; margin-top: 28px;
+    background: linear-gradient(135deg, var(--green), #1e8449);
+    color: #fff; font-size: 1.1rem; font-weight: 800;
+    padding: 16px 44px; border-radius: 50px;
+    letter-spacing: 0.5px; cursor: pointer;
+    border: none; text-decoration: none;
+    box-shadow: 0 8px 32px rgba(39,174,96,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .cta-btn:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(39,174,96,0.55); }
+
+  .cta-note { font-size: 0.8rem; color: var(--muted); margin-top: 12px; }
+
+  /* ── LIST ── */
+  .feature-list { list-style: none; margin-top: 12px; }
+  .feature-list li {
+    padding: 7px 0; font-size: 1rem; color: var(--muted);
+    border-bottom: 1px solid var(--card-border);
+  }
+  .feature-list li::before { content: "▸  "; color: var(--green); font-weight: 700; }
+
+  /* ── BIG STAT ── */
+  .big-stat { font-size: clamp(3rem, 7vw, 5.5rem); font-weight: 900; line-height: 1; }
+
+  /* ── PROGRESS + COUNTER ── */
+  #hud {
+    position: fixed; bottom: 24px; right: 28px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    z-index: 100;
+  }
+  #counter {
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 1px;
+    color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.35);
+    padding: 4px 10px; border-radius: 20px;
+  }
+  #progress-bar-wrap {
+    width: 120px; height: 4px;
+    background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden;
+  }
+  #progress-bar {
+    height: 100%; background: var(--green);
+    border-radius: 2px; transition: width 0.45s ease;
+  }
+
+  /* ── NAV ARROWS ── */
+  .nav-btn {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.5); font-size: 1.4rem;
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 100;
+    transition: background 0.2s, color 0.2s;
+  }
+  .nav-btn:hover { background: rgba(39,174,96,0.2); color: var(--green); }
+  #nav-prev { left: 16px; }
+  #nav-next { right: 16px; }
+
+  /* ── LOGO ── */
+  .logo-mark {
+    font-size: 2.2rem; font-weight: 900; letter-spacing: -1px;
+    color: #fff; margin-bottom: 6px;
+  }
+  .logo-mark span { color: var(--green); }
+
+  /* ── COVER ACCENT ── */
+  .cover-icon { font-size: 4.5rem; margin-bottom: 20px; filter: drop-shadow(0 0 24px rgba(39,174,96,0.5)); }
+
+  /* ── SEPARATOR ── */
+  .sep {
+    width: 56px; height: 4px; background: var(--green);
+    border-radius: 2px; margin: 16px auto 24px;
+  }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--green);
+    background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.25);
+    padding: 5px 16px; border-radius: 20px; margin-bottom: 18px;
+  }
+
+  /* ── PIPELINE BAR ── */
+  .pipeline {
+    display: flex; gap: 0; width: 100%; max-width: 840px; margin: 14px 0;
+    border-radius: 10px; overflow: hidden;
+  }
+  .pipe-seg {
+    flex: 1; text-align: center; padding: 10px 4px; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .ps-new      { background: rgba(39,174,96,0.25);  color: #27ae60; }
+  .ps-called   { background: rgba(52,152,219,0.25); color: #3498db; }
+  .ps-meeting  { background: rgba(155,89,182,0.25); color: #9b59b6; }
+  .ps-sale     { background: rgba(240,192,64,0.25); color: var(--gold); }
+  .ps-lost     { background: rgba(231,76,60,0.25);  color: #e74c3c; }
+
+  /* ── KVKK chip ── */
+  .kvkk-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.3);
+    border-radius: 20px; padding: 5px 14px; font-size: 0.78rem; color: var(--green);
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+  <!-- ══════════════════════════════
+       SLAYT 1 — KAPAK
+  ══════════════════════════════ -->
+  <div class="slide active" id="s1">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="cover-icon">🏠</div>
+    <div class="logo-mark">Emlak<span>Bot</span></div>
+    <h1 style="margin-top:8px;">Geceleri de <span class="highlight">satıyor.</span></h1>
+    <div class="sep"></div>
+    <p class="subtitle">
+      WhatsApp'a gelen her müşteri sorusuna <strong style="color:#fff;">7/24 yapay zeka</strong> ile anında cevap verin,<br>
+      sıcak lead'leri <strong style="color:#fff;">otomatik olarak</strong> CRM'inize düşürün —<br>
+      siz uyurken bile satış makineniz çalışsın.
+    </p>
+    <span class="kvkk-chip">🔒 KVKK Uyumlu &nbsp;·&nbsp; 14 Gün Ücretsiz Dene</span>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 2 — PROBLEM
+  ══════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Gerçeklik</div>
+    <h2>Siz de bu <span class="highlight">acıları</span> yaşıyor musunuz?</h2>
+    <div class="sep"></div>
+    <div class="grid-2" style="max-width:900px; margin-top:8px;">
+      <div class="pain-card">
+        <span class="icon">🌙</span>
+        <h3>Gece 22:00'de Gelen Mesaj</h3>
+        <p>"3+1 daire arıyorum, bütçem 4 milyon, yarın bakmak istiyorum." — Siz uykudasınız, mesajı sabah görüyorsunuz. O müşteri rakibinizle görüşmüş bile.</p>
+      </div>
+      <div class="pain-card">
+        <span class="icon">⏳</span>
+        <h3>Vakit Hırsızları</h3>
+        <p>Her gün onlarca "nasıl bir mülk istiyorsunuz?" sorusunu el ile yazıyorsunuz. Bu tekrar eden işlemler saatlerinizi çalıyor.</p>
+      </div>
+      <div class="pain-card">
+        <span class="icon">📉</span>
+        <h3>Lead Kayıpları</h3>
+        <p>Bir araştırmaya göre potansiyel müşterilerin %78'i ilk cevap veren emlakçı ile çalışıyor. Geç kalan kaybediyor.</p>
+      </div>
+      <div class="pain-card">
+        <span class="icon">📋</span>
+        <h3>Dağınık Takip</h3>
+        <p>Notlar WhatsApp'ta, randevular telefonda, müşteri bilgileri Excel'de. Hiçbir şey tek bir yerde değil, lead'ler çatlaklardan kayıyor.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 3 — ÇÖZÜM
+  ══════════════════════════════ -->
+  <div class="slide" id="s3">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Çözüm</div>
+    <h2><span class="highlight">EmlakBot</span> ne yapar?</h2>
+    <p class="subtitle" style="margin-bottom:10px;">WhatsApp'ınıza gelen her müşteriyi 7/24 karşılar, nitelendirerek size hazır lead olarak teslim eder.</p>
+    <div class="sep"></div>
+    <div class="grid-2" style="max-width:880px; margin-top:4px;">
+      <div class="card">
+        <span class="icon">🤖</span>
+        <h3>Anında & Akıllı Yanıt</h3>
+        <p>Bot, ofisinizin adıyla ve belirlediğiniz tonda müşteriyi karşılar. Mesaj gece 03:00'te gelse de 3 saniyede cevap alır.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🎯</span>
+        <h3>4 Soruyla Nitelendirme</h3>
+        <p><strong style="color:#fff;">Amaç · Bütçe · Lokasyon · Zaman.</strong> Bot bu 4 kritik soruyu doğal bir konuşma akışında sorar ve yanıtları kaydeder.</p>
+      </div>
+      <div class="card">
+        <span class="icon">📊</span>
+        <h3>Otomatik CRM Kaydı</h3>
+        <p>Nitelendirilen müşteri, bilgileriyle birlikte anında CRM'inizdeki "Yeni" kolonuna düşer. Siz sadece takip edersiniz.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🔔</span>
+        <h3>Hatırlatma & Takip</h3>
+        <p>Her lead için not, görev ve hatırlatma ekleyin. Pipeline'da ilerlemeyen lead'leri sistem size bildirir.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 4 — NASIL ÇALIŞIR?
+  ══════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Akış</div>
+    <h2>Nasıl <span class="highlight">çalışır?</span></h2>
+    <div class="sep"></div>
+    <div class="flow">
+      <div class="flow-step">
+        <span class="icon">💬</span>
+        <strong>Müşteri Yazar</strong>
+        <span>WhatsApp'a mesaj gönderir</span>
+      </div>
+      <div class="flow-arrow">›</div>
+      <div class="flow-step">
+        <span class="icon">🤖</span>
+        <strong>Bot Karşılar</strong>
+        <span>Ofisiniz adına, saniyeler içinde</span>
+      </div>
+      <div class="flow-arrow">›</div>
+      <div class="flow-step">
+        <span class="icon">❓</span>
+        <strong>4 Soru Sorar</strong>
+        <span>Amaç · Bütçe · Lokasyon · Zaman</span>
+      </div>
+      <div class="flow-arrow">›</div>
+      <div class="flow-step" style="border-color: rgba(39,174,96,0.4);">
+        <span class="icon">🔥</span>
+        <strong style="color:var(--green);">Sıcak Lead</strong>
+        <span>CRM'e düşer, sizi bilgilendirir</span>
+      </div>
+      <div class="flow-arrow">›</div>
+      <div class="flow-step" style="border-color: rgba(240,192,64,0.4);">
+        <span class="icon">🏆</span>
+        <strong style="color:var(--gold);">Siz Kapatırsınız</strong>
+        <span>Hazır müşteriyle buluşun</span>
+      </div>
+    </div>
+    <div class="pipeline" style="margin-top:32px;">
+      <div class="pipe-seg ps-new">🟢 YENİ</div>
+      <div class="pipe-seg ps-called">📞 ARANDI</div>
+      <div class="pipe-seg ps-meeting">📅 RANDEVU</div>
+      <div class="pipe-seg ps-sale">💰 SATIŞ</div>
+      <div class="pipe-seg ps-lost">❌ KAYIP</div>
+    </div>
+    <p class="subtitle" style="margin-top:12px; font-size:0.85rem;">Müşteri her aşamada tek tıkla taşınır. Lead'in tam geçmişi ve notları pipeline'da sizinle birlikte ilerler.</p>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 5 — DASHBOARD DEMO
+  ══════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Dashboard</div>
+    <h2>CRM <span class="highlight">Ekranı</span></h2>
+    <div class="sep" style="margin-bottom:14px;"></div>
+    <!-- Mini stat row -->
+    <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; justify-content:center;">
+      <div class="card" style="padding:14px 22px; text-align:center; min-width:140px;">
+        <div class="big-stat highlight" style="font-size:2rem;">24</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Aktif Lead</div>
+      </div>
+      <div class="card" style="padding:14px 22px; text-align:center; min-width:140px;">
+        <div class="big-stat" style="font-size:2rem; color:var(--gold);">7</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Bugün Yeni</div>
+      </div>
+      <div class="card" style="padding:14px 22px; text-align:center; min-width:140px;">
+        <div class="big-stat" style="font-size:2rem; color:#9b59b6;">3</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Randevu</div>
+      </div>
+      <div class="card" style="padding:14px 22px; text-align:center; min-width:140px;">
+        <div class="big-stat" style="font-size:2rem; color:var(--gold);">₺2.4M</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Bu Ay Ciro</div>
+      </div>
+    </div>
+    <table class="crm-table">
+      <thead>
+        <tr>
+          <th>Müşteri</th>
+          <th>Amaç</th>
+          <th>Bütçe</th>
+          <th>Lokasyon</th>
+          <th>Zaman</th>
+          <th>Durum</th>
+          <th>Son Temas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🧑 Ahmet Y.</td>
+          <td>Satın Al</td>
+          <td>₺4.5M</td>
+          <td>Kadıköy</td>
+          <td>1 ay içinde</td>
+          <td><span class="badge badge-meeting">📅 Randevu</span></td>
+          <td>Bugün 14:22</td>
+        </tr>
+        <tr>
+          <td>👩 Selin K.</td>
+          <td>Kiralık</td>
+          <td>₺25.000/ay</td>
+          <td>Beşiktaş</td>
+          <td>Acil</td>
+          <td><span class="badge badge-new">🟢 Yeni</span></td>
+          <td>Bugün 22:07</td>
+        </tr>
+        <tr>
+          <td>🧑 Murat D.</td>
+          <td>Satın Al</td>
+          <td>₺8M</td>
+          <td>Nişantaşı</td>
+          <td>Esnek</td>
+          <td><span class="badge badge-called">📞 Arandı</span></td>
+          <td>Dün 11:40</td>
+        </tr>
+        <tr>
+          <td>👩 Zeynep A.</td>
+          <td>Yatırım</td>
+          <td>₺12M</td>
+          <td>Maslak</td>
+          <td>3 ay içinde</td>
+          <td><span class="badge badge-sale">💰 Satış</span></td>
+          <td>2 gün önce</td>
+        </tr>
+        <tr>
+          <td>🧑 Emre T.</td>
+          <td>Kiralık</td>
+          <td>₺18.000/ay</td>
+          <td>Üsküdar</td>
+          <td>2 hafta</td>
+          <td><span class="badge badge-meeting">📅 Randevu</span></td>
+          <td>Bugün 09:15</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="cta-note" style="margin-top:12px;">Tüm veriler Excel'e aktarılabilir &nbsp;·&nbsp; Gerçek zamanlı güncellenir &nbsp;·&nbsp; Mobil uyumlu</p>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 6 — ÖZELLİKLER
+  ══════════════════════════════ -->
+  <div class="slide" id="s6">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Özellikler</div>
+    <h2>Her şey <span class="highlight">dahil.</span></h2>
+    <div class="sep" style="margin-bottom:16px;"></div>
+    <div class="grid-4" style="margin-top:0;">
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">🤖</span>
+        <h3>7/24 Yapay Zeka</h3>
+        <p>Gece gündüz, tatilde, toplantıda. Bot asla yorulmaz.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">🎙️</span>
+        <h3>Ton Ayarı</h3>
+        <p>Profesyonel, Samimi veya Lüks ton. Markanıza uygun konuşur.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">🏢</span>
+        <h3>Ofis Kimliği</h3>
+        <p>Bot ofisinizin adıyla tanıtır. Müşteri bir fark etmez.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">📊</span>
+        <h3>Mini CRM</h3>
+        <p>Yeni → Arandı → Randevu → Satış → Kayıp pipeline'ı.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">📝</span>
+        <h3>Not & Hatırlatma</h3>
+        <p>Her lead'e not ekle, görev oluştur, bildirim al.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">📤</span>
+        <h3>Excel Export</h3>
+        <p>Tüm lead verilerini tek tıkla Excel'e aktar.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">🔒</span>
+        <h3>KVKK Uyumlu</h3>
+        <p>Veri işleme standartlarına tam uyum. Güvenli altyapı.</p>
+      </div>
+      <div class="card" style="padding:20px 16px;">
+        <span class="icon">📱</span>
+        <h3>Mobil Öncelikli</h3>
+        <p>Telefonda, tablette, masaüstünde kusursuz çalışır.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 7 — ROI
+  ══════════════════════════════ -->
+  <div class="slide" id="s7">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Yatırım Getirisi</div>
+    <h2>Ayda <span class="highlight">5 lead</span> kurtarırsanız ne kazanırsınız?</h2>
+    <div class="sep" style="margin-bottom:16px;"></div>
+    <div class="roi-box">
+      <div class="roi-row">
+        <span class="lbl">Kurtarılan lead sayısı (ay)</span>
+        <span class="val">5 müşteri</span>
+      </div>
+      <div class="roi-row">
+        <span class="lbl">Ortalama dönüşüm oranı</span>
+        <span class="val">%20 (= 1 satış)</span>
+      </div>
+      <div class="roi-row">
+        <span class="lbl">Ortalama komisyon (₺5M mülk × %1)</span>
+        <span class="val" style="color:var(--gold);">₺50.000</span>
+      </div>
+      <div class="roi-row">
+        <span class="lbl">EmlakBot maliyeti (Ofis planı)</span>
+        <span class="val" style="color:#e74c3c;">- ₺1.499</span>
+      </div>
+      <div class="roi-row total">
+        <span class="lbl">Net kazanç (ayda, 1 satıştan)</span>
+        <span class="val">₺48.501</span>
+      </div>
+    </div>
+    <p class="subtitle" style="margin-top:18px; font-size:0.88rem;">
+      EmlakBot'un aylık maliyeti, tek bir orta segment satışın komisyonunun
+      <span class="highlight" style="font-weight:800;"> %3'ünden az.</span><br>
+      Geri kalanı saf kâr.
+    </p>
+    <div style="display:flex; gap:32px; margin-top:8px;">
+      <div style="text-align:center;">
+        <div class="big-stat highlight">33x</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Yatırım getirisi</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="big-stat" style="color:var(--gold);">0</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Fazladan çalışma saati</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="big-stat highlight">7/24</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Aktif satış makinesi</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 8 — FİYATLANDIRMA
+  ══════════════════════════════ -->
+  <div class="slide" id="s8">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Fiyatlandırma</div>
+    <h2>Sizi <span class="highlight">durduracak bir fiyat</span> yok.</h2>
+    <div class="sep" style="margin-bottom:20px;"></div>
+    <div class="grid-3" style="max-width:960px; align-items:start;">
+      <!-- Bireysel -->
+      <div class="price-card">
+        <h3>Bireysel</h3>
+        <div class="price-amount">₺499</div>
+        <div class="price-period">/ ay (KDV dahil)</div>
+        <ul class="price-features">
+          <li>1 WhatsApp hattı</li>
+          <li>7/24 yapay zeka yanıt</li>
+          <li>4 sorulu nitelendirme</li>
+          <li>Mini CRM pipeline</li>
+          <li>100 lead/ay</li>
+          <li>Excel export</li>
+          <li>E-posta destek</li>
+        </ul>
+      </div>
+      <!-- Ofis (Öne Çıkan) -->
+      <div class="price-card featured">
+        <div class="price-badge">En Popüler</div>
+        <h3 style="color:var(--green);">Ofis</h3>
+        <div class="price-amount">₺1.499</div>
+        <div class="price-period">/ ay (KDV dahil)</div>
+        <ul class="price-features">
+          <li>3 WhatsApp hattı</li>
+          <li>7/24 yapay zeka yanıt</li>
+          <li>4 sorulu nitelendirme</li>
+          <li>Tam CRM + pipeline</li>
+          <li>Sınırsız lead</li>
+          <li>Excel export</li>
+          <li>Ton & kimlik ayarı</li>
+          <li>Hatırlatma & bildirim</li>
+          <li>Öncelikli destek</li>
+        </ul>
+      </div>
+      <!-- Kurumsal -->
+      <div class="price-card">
+        <h3>Kurumsal</h3>
+        <div class="price-amount">₺4.999<span style="font-size:1.2rem;">+</span></div>
+        <div class="price-period">/ ay (özel fiyat)</div>
+        <ul class="price-features">
+          <li>Sınırsız hat & kullanıcı</li>
+          <li>Özel bot kişiliği</li>
+          <li>API entegrasyonu</li>
+          <li>Çok şube yönetimi</li>
+          <li>Sınırsız lead</li>
+          <li>Gelişmiş raporlama</li>
+          <li>SLA güvenceli destek</li>
+          <li>Özel onboarding</li>
+        </ul>
+      </div>
+    </div>
+    <p class="cta-note" style="margin-top:16px; font-size:0.82rem;">Tüm planlarda <strong style="color:#fff;">14 gün ücretsiz deneme</strong> — kredi kartı gerekmez.</p>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 9 — SOSYAL KANIT
+  ══════════════════════════════ -->
+  <div class="slide" id="s9">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="section-label">Referanslar</div>
+    <h2>Emlakçılar <span class="highlight">ne diyor?</span></h2>
+    <div class="sep" style="margin-bottom:20px;"></div>
+    <div class="grid-3" style="max-width:1040px;">
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="quote">Gece 23'te gelen bir müşteri sabah benim randevuma geldi. EmlakBot sayesinde sıcak lead'i kaçırmadım. Artık her gece rahat uyuyorum.</p>
+        <div class="author">Serkan Yılmaz</div>
+        <div class="role">Bireysel Emlakçı — İstanbul, Kadıköy</div>
+      </div>
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="quote">Ofisimizde 3 danışmanla çalışıyoruz. EmlakBot lead'leri eşit dağıtıyor, pipeline'ı herkes görüyor. Satışlarımız ilk ayda %30 arttı.</p>
+        <div class="author">Ayşe Kara</div>
+        <div class="role">Ofis Sahibi — Ankara, Çankaya</div>
+      </div>
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="quote">Lüks segment çalışıyorum. Botun tonu tam istediğim gibi ayarlandı — müşterilerim gerçek bir danışmanla mı konuşuyor diye sordular.</p>
+        <div class="author">Mert Demir</div>
+        <div class="role">Lüks Gayrimenkul Uzmanı — İzmir</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:40px; margin-top:24px; flex-wrap:wrap; justify-content:center;">
+      <div style="text-align:center;">
+        <div class="big-stat highlight" style="font-size:2.5rem;">500+</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Aktif Emlakçı</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="big-stat" style="font-size:2.5rem; color:var(--gold);">12.000+</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Nitelendirilen Lead</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="big-stat highlight" style="font-size:2.5rem;">4.9/5</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Ortalama Puan</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="big-stat" style="font-size:2.5rem; color:var(--gold);">%94</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Yenileme Oranı</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SLAYT 10 — KAPANIŞ / CTA
+  ══════════════════════════════ -->
+  <div class="slide" id="s10">
+    <div class="blob blob-1"></div><div class="blob blob-2"></div>
+    <div class="cover-icon" style="font-size:3.5rem;">🚀</div>
+    <div class="section-label">Harekete Geç</div>
+    <h2>Bir sonraki müşteriniz şu an <span class="highlight">WhatsApp'ta yazıyor.</span></h2>
+    <div class="sep"></div>
+    <p class="subtitle">
+      İlk 14 gün tamamen ücretsiz. Kredi kartı yok, taahhüt yok.<br>
+      Kurulum 5 dakika — bugün başlayın, bu gece ilk sıcak lead'inizi alın.
+    </p>
+    <div style="display:flex; gap:32px; margin: 16px 0; flex-wrap:wrap; justify-content:center;">
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:800; color:var(--green);">5 dak.</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Kurulum süresi</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:800; color:var(--gold);">14 gün</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Ücretsiz deneme</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:800; color:var(--green);">7/24</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Aktif bot</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:800; color:var(--gold);">₺0</div>
+        <div style="font-size:0.8rem; color:var(--muted);">İlk 14 gün</div>
+      </div>
+    </div>
+    <a class="cta-btn" href="#">14 Gün Ücretsiz Dene →</a>
+    <p class="cta-note">Kredi kartı gerekmez &nbsp;·&nbsp; İstediğiniz zaman iptal &nbsp;·&nbsp; KVKK uyumlu</p>
+    <div style="margin-top:24px; display:flex; gap:24px; flex-wrap:wrap; justify-content:center; align-items:center;">
+      <span style="font-size:0.8rem; color:var(--muted);">📞 Satış: 0850 xxx xx xx</span>
+      <span style="font-size:0.8rem; color:var(--muted);">📧 info@emlakbot.com.tr</span>
+      <span style="font-size:0.8rem; color:var(--muted);">🌐 www.emlakbot.com.tr</span>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- ── HUD ── -->
+<div id="hud">
+  <span id="counter">1 / 10</span>
+  <div id="progress-bar-wrap">
+    <div id="progress-bar" style="width:10%;"></div>
+  </div>
+</div>
+
+<!-- ── NAV BUTTONS ── -->
+<button class="nav-btn" id="nav-prev" aria-label="Önceki slayt">‹</button>
+<button class="nav-btn" id="nav-next" aria-label="Sonraki slayt">›</button>
+
+<script>
+(function () {
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let current = 0;
+  let isAnimating = false;
+
+  const counter = document.getElementById('counter');
+  const bar = document.getElementById('progress-bar');
+
+  function updateHUD() {
+    counter.textContent = (current + 1) + ' / ' + total;
+    bar.style.width = (((current + 1) / total) * 100) + '%';
+  }
+
+  function goTo(idx) {
+    if (isAnimating) return;
+    if (idx < 0 || idx >= total) return;
+    if (idx === current) return;
+
+    isAnimating = true;
+    const prev = slides[current];
+    const next = slides[idx];
+
+    prev.classList.add('exit');
+    prev.classList.remove('active');
+
+    // reset next transform direction
+    next.style.transform = idx > current ? 'translateX(60px)' : 'translateX(-60px)';
+    next.style.opacity = '0';
+
+    requestAnimationFrame(function () {
+      next.style.transition = 'none';
+      requestAnimationFrame(function () {
+        next.style.transition = '';
+        next.classList.add('active');
+        current = idx;
+        updateHUD();
+        setTimeout(function () {
+          prev.classList.remove('exit');
+          prev.style.transform = '';
+          isAnimating = false;
+        }, 560);
+      });
+    });
+  }
+
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+
+  document.getElementById('nav-next').addEventListener('click', next);
+  document.getElementById('nav-prev').addEventListener('click', prev);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); next();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); prev();
+    }
+  });
+
+  // Touch / swipe
+  let touchStartX = 0;
+  document.addEventListener('touchstart', function (e) {
+    touchStartX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
+  }, { passive: true });
+
+  updateHUD();
+})();
+</script>
+</body>
+</html>

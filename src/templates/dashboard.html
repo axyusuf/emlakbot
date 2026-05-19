@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gayrimenkul - Kalifikasyon Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        header span {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            padding: 30px 40px 10px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            min-width: 160px;
+        }
+
+        .stat-card .number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .stat-card .label {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .stat-card.green .number { color: #27ae60; }
+
+        .container {
+            padding: 20px 40px 40px;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .table-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .refresh-btn {
+            background: #1a1a2e;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .refresh-btn:hover { opacity: 0.85; }
+
+        table {
+            width: 100%;
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            border-collapse: collapse;
+            overflow: hidden;
+        }
+
+        thead tr {
+            background: #1a1a2e;
+            color: white;
+        }
+
+        thead th {
+            padding: 14px 18px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f0f2f5;
+            transition: background 0.15s;
+        }
+
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: #f8f9ff; }
+
+        tbody td {
+            padding: 14px 18px;
+            font-size: 14px;
+            vertical-align: top;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-green { background: #e8f8f0; color: #27ae60; }
+        .badge-blue  { background: #e8f0ff; color: #2563eb; }
+
+        .phone { color: #555; font-family: monospace; font-size: 13px; }
+        .date  { color: #999; font-size: 12px; }
+
+        .empty {
+            text-align: center;
+            padding: 60px;
+            color: #aaa;
+            font-size: 15px;
+        }
+
+        .auto-refresh {
+            font-size: 12px;
+            color: #aaa;
+            text-align: right;
+            margin-top: 12px;
+        }
+
+        #countdown { font-weight: 600; color: #1a1a2e; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Gayrimenkul — Danışman Dashboard</h1>
+    <span id="now"></span>
+</header>
+
+<div class="stats">
+    <div class="stat-card green">
+        <div class="number" id="total-count">{{ leads | length }}</div>
+        <div class="label">Toplam Kalifikasyon</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" id="today-count">{{ today_count }}</div>
+        <div class="label">Bugün Gelen</div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="table-header">
+        <h2>Kalifikasyon Listesi</h2>
+        <button class="refresh-btn" onclick="location.reload()">Yenile</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Ad Soyad</th>
+                <th>Telefon</th>
+                <th>Amaç</th>
+                <th>Bütçe</th>
+                <th>Lokasyon</th>
+                <th>Zaman</th>
+                <th>Tarih</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if leads %}
+                {% for lead in leads %}
+                <tr>
+                    <td class="date">{{ lead.lead_id }}</td>
+                    <td><strong>{{ lead.name }}</strong></td>
+                    <td class="phone">{{ lead.phone }}</td>
+                    <td>
+                        {% if 'yatırım' in lead.purpose | lower %}
+                            <span class="badge badge-blue">{{ lead.purpose }}</span>
+                        {% else %}
+                            <span class="badge badge-green">{{ lead.purpose }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ lead.budget }}</td>
+                    <td>{{ lead.location_preference }}</td>
+                    <td>{{ lead.timeline }}</td>
+                    <td class="date">{{ lead.created_at }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" class="empty">Henüz kalifikasyon yok. Bot mesaj aldıkça burası dolacak.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="auto-refresh">Otomatik yenileme: <span id="countdown">30</span> saniye</div>
+</div>
+
+<script>
+    document.getElementById('now').textContent = new Date().toLocaleString('tr-TR');
+
+    let secs = 30;
+    setInterval(() => {
+        secs--;
+        document.getElementById('countdown').textContent = secs;
+        if (secs <= 0) location.reload();
+    }, 1000);
+</script>
+
+</body>
+</html>

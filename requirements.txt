@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+openai
+httpx
+python-dotenv
+supabase
+bcrypt
+itsdangerous
+python-multipart
+jinja2
+openpyxl
+psycopg2-binary
+starlette
