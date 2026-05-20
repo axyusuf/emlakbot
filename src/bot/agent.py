@@ -34,11 +34,11 @@ OLLAMA_CLIENT = OpenAI(
 # Hata verirlerse sıradakini deneriz, hepsi düşerse Ollama'ya geçer.
 # Sıra: hızlı/küçük → büyük/güçlü.
 FREE_MODELS = [
-    "google/gemma-4-31b-it:free",                        # Çok dilli, Türkçe'de iyi
-    "deepseek/deepseek-v4-flash:free",                   # Verimli, hızlı
-    "nvidia/nemotron-3-super-120b-a12b:free",            # Büyük, güçlü
-    "google/gemma-4-26b-a4b-it:free",                    # Alternatif Gemma
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", # Yedek
+    "deepseek/deepseek-v4-flash:free",                   # En hızlı
+    "google/gemma-4-26b-a4b-it:free",                    # Küçük, hızlı
+    "google/gemma-4-31b-it:free",                        # Türkçe'de iyi
+    "nvidia/nemotron-3-super-120b-a12b:free",            # Yedek
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", # Son yedek
 ]
 
 OLLAMA_MODEL = "llama3"
@@ -116,7 +116,12 @@ def _try_model(messages: list, model: str, custom_client=None) -> str | None:
     if target is None:
         return None
     try:
-        resp = target.chat.completions.create(model=model, messages=messages)
+        resp = target.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=200,
+            timeout=15,
+        )
         return resp.choices[0].message.content
     except Exception as e:
         safe_print(f"Model hatası ({model}): {e}")
