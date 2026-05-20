@@ -55,7 +55,10 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=60 * 60
 app.include_router(auth_router)
 
 # DB init
-init_db()
+try:
+    init_db()
+except Exception as _db_err:
+    print(f"DB init hatası (uygulama yine de başlıyor): {_db_err}")
 
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "gayri_menkul").strip()
 
