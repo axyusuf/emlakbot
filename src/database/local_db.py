@@ -133,6 +133,32 @@ def init_db():
         _commit(conn)
     finally:
         _close(conn)
+    _auto_seed_default_tenant()
+
+
+def _auto_seed_default_tenant():
+    """Hiç tenant yoksa env'den otomatik varsayılan tenant oluşturur."""
+    conn = _connect()
+    try:
+        rows = _fetchall(_execute(conn, "SELECT id FROM tenants"))
+        if rows:
+            return
+    finally:
+        _close(conn)
+
+    import bcrypt
+    email = os.getenv("DEFAULT_TENANT_EMAIL", "admin@emlakbot.local")
+    password = os.getenv("DEFAULT_TENANT_PASSWORD", "emlak1234")
+    office_name = os.getenv("DEFAULT_OFFICE_NAME", "EmlakBot Ofisi")
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+    tid = create_tenant(email=email, password_hash=pw_hash, office_name=office_name)
+    settings = {
+        "whatsapp_phone_id": os.getenv("WHATSAPP_PHONE_ID", ""),
+        "whatsapp_token": os.getenv("WHATSAPP_TOKEN", ""),
+    }
+    update_tenant_settings(tid, settings)
+    print(f"[AutoSeed] Tenant oluşturuldu: {email} / {password}")
 
 
 def _init_pg(conn):
