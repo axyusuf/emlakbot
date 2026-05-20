@@ -45,8 +45,8 @@ else:
 
 # Gemini modelleri — birincil, günde 1.500 ücretsiz istek
 GEMINI_MODELS = [
-    "gemini-2.5-flash-preview-05-20",
     "gemini-2.0-flash",
+    "gemini-2.5-flash-preview-05-20",
 ]
 
 # Gemini 2.5 thinking parametreleri
