@@ -156,6 +156,8 @@ def _auto_seed_default_tenant():
     settings = {
         "whatsapp_phone_id": os.getenv("WHATSAPP_PHONE_ID", ""),
         "whatsapp_token": os.getenv("WHATSAPP_TOKEN", ""),
+        "bot_tone": "samimi",
+        "system_prompt_extras": os.getenv("DEFAULT_SYSTEM_PROMPT_EXTRAS", ""),
     }
     update_tenant_settings(tid, settings)
     print(f"[AutoSeed] Tenant oluşturuldu: {email} / {password}")
