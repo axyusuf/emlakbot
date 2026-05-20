@@ -1,0 +1,44 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      RENDER_API_KEY: rnd_WZOvZc3xYnRWxmvN80wQWQwYinmM
+      RENDER_SERVICE_ID: srv-d868jcp9rddc73f34bfg
+
+    steps:
+      - name: Repo geçici public yap
+        run: |
+          curl -s -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"private":false}' \
+            https://api.github.com/repos/${{ github.repository }}
+
+      - name: Render deploy tetikle
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys
+
+      - name: Deploy bitmesini bekle (3 dk)
+        run: sleep 180
+
+      - name: Repo tekrar private yap
+        if: always()
+        run: |
+          curl -s -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"private":true}' \
+            https://api.github.com/repos/${{ github.repository }}
