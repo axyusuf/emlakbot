@@ -429,6 +429,10 @@ def find_tenant_by_whatsapp_phone_id(phone_id: str) -> Optional[dict]:
             settings = json.loads(t.get("settings_json") or "{}")
             if settings.get("whatsapp_phone_id") == phone_id:
                 return t
+        # Fallback: global WHATSAPP_PHONE_ID env var eşleşirse ilk tenant'ı dön
+        global_phone_id = os.getenv("WHATSAPP_PHONE_ID", "").strip()
+        if global_phone_id and phone_id == global_phone_id and rows:
+            return rows[0]
         return None
     finally:
         _close(conn)

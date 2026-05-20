@@ -10,7 +10,6 @@ ayarlarına göre dinamik sistem promptu üretir.
 """
 
 import os
-import json
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -35,11 +34,11 @@ OLLAMA_CLIENT = OpenAI(
 # Hata verirlerse sıradakini deneriz, hepsi düşerse Ollama'ya geçer.
 # Sıra: hızlı/küçük → büyük/güçlü.
 FREE_MODELS = [
-    "google/gemma-4-31b-it:free",            # Çok dilli, Türkçe'de iyi
-    "openai/gpt-oss-20b:free",               # Küçük, hızlı
-    "deepseek/deepseek-v4-flash:free",       # Verimli MoE
-    "openai/gpt-oss-120b:free",              # Büyük, güçlü
-    "nvidia/nemotron-3-super-120b-a12b:free", # Ek yedek
+    "google/gemma-4-31b-it:free",                        # Çok dilli, Türkçe'de iyi
+    "deepseek/deepseek-v4-flash:free",                   # Verimli, hızlı
+    "nvidia/nemotron-3-super-120b-a12b:free",            # Büyük, güçlü
+    "google/gemma-4-26b-a4b-it:free",                    # Alternatif Gemma
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", # Yedek
 ]
 
 OLLAMA_MODEL = "llama3"
