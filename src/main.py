@@ -24,6 +24,7 @@ import secrets
 from datetime import datetime
 from html import escape
 
+import httpx
 from fastapi import FastAPI, Request, BackgroundTasks, Form, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.exception_handlers import http_exception_handler
@@ -488,9 +489,47 @@ def settings_page(request: Request, saved: int = 0):
     return HTMLResponse(_shell("Ayarlar", body, tenant))
 
 
+def _sync_token_to_render(new_token: str):
+    api_key = os.getenv("RENDER_API_KEY")
+    service_id = os.getenv("RENDER_SERVICE_ID")
+    if not api_key or not service_id:
+        return
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(
+                f"https://api.render.com/v1/services/{service_id}/env-vars",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if resp.status_code != 200:
+                return
+            items = resp.json()
+            put_vars = []
+            found = False
+            for item in items:
+                ev = item.get("envVar", item)
+                key = ev.get("key", "")
+                val = ev.get("value", "")
+                if key == "WHATSAPP_TOKEN":
+                    put_vars.append({"key": key, "value": new_token})
+                    found = True
+                else:
+                    put_vars.append({"key": key, "value": val})
+            if not found:
+                put_vars.append({"key": "WHATSAPP_TOKEN", "value": new_token})
+            resp2 = client.put(
+                f"https://api.render.com/v1/services/{service_id}/env-vars",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json=put_vars,
+            )
+            safe_print(f"Render token sync: {resp2.status_code}")
+    except Exception as e:
+        safe_print(f"Render token sync hatası: {e}")
+
+
 @app.post("/app/settings")
 def settings_save(
     request: Request,
+    background_tasks: BackgroundTasks,
     office_name: str = Form(...),
     contact_name: str = Form(""),
     phone: str = Form(""),
@@ -502,13 +541,16 @@ def settings_save(
     tid = require_tenant(request)
     update_tenant(tid, office_name.strip(), contact_name.strip(), phone.strip())
     settings = get_tenant_settings(tid)
+    new_token = whatsapp_token.strip()
     settings.update({
         "bot_tone": bot_tone,
         "system_prompt_extras": system_prompt_extras.strip(),
-        "whatsapp_token": whatsapp_token.strip(),
+        "whatsapp_token": new_token,
         "whatsapp_phone_id": whatsapp_phone_id.strip(),
     })
     update_tenant_settings(tid, settings)
+    if new_token:
+        background_tasks.add_task(_sync_token_to_render, new_token)
     return RedirectResponse("/app/settings?saved=1", status_code=303)
 
 
