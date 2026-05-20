@@ -34,10 +34,10 @@ if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "your_openrouter_api_key":
 else:
     client = None
 
-# Groq modelleri — hızlı, ücretsiz, günde 14.400 istek
+# Groq modelleri — ücretsiz, günde 14.400 istek
 GROQ_MODELS = [
-    "llama-3.1-8b-instant",    # En hızlı
-    "llama-3.3-70b-versatile", # Yedek, daha güçlü
+    "llama-3.3-70b-versatile", # Güçlü, Türkçe'de iyi
+    "llama-3.1-8b-instant",    # Yedek, hızlı
 ]
 
 # OpenRouter yedek modelleri
