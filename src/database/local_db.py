@@ -134,6 +134,7 @@ def init_db():
     finally:
         _close(conn)
     _auto_seed_default_tenant()
+    _restore_leads_from_supabase()
 
 
 def _auto_seed_default_tenant():
@@ -161,6 +162,63 @@ def _auto_seed_default_tenant():
     }
     update_tenant_settings(tid, settings)
     print(f"[AutoSeed] Tenant oluşturuldu: {email} / {password}")
+
+
+def _restore_leads_from_supabase():
+    """Supabase'deki leadleri SQLite'a yükler (restart sonrası veri kaybını önler)."""
+    import urllib.request
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_KEY", "")
+    if not supabase_url or not supabase_key:
+        return
+
+    conn = _connect()
+    try:
+        tenant_row = _fetchone(_execute(conn, "SELECT id FROM tenants ORDER BY id LIMIT 1"))
+    finally:
+        _close(conn)
+
+    if not tenant_row:
+        return
+    tid = tenant_row["id"]
+
+    try:
+        req = urllib.request.Request(
+            f"{supabase_url}/rest/v1/leads?select=*&order=created_at.asc",
+            headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            remote_leads = json.loads(resp.read())
+    except Exception as e:
+        print(f"[Restore] Supabase'den lead çekme hatası: {e}")
+        return
+
+    if not remote_leads:
+        return
+
+    conn = _connect()
+    try:
+        existing = {r["lead_id"] for r in _fetchall(_execute(conn, "SELECT lead_id FROM leads WHERE tenant_id = ?", (tid,)))}
+        imported = 0
+        for lead in remote_leads:
+            lid = lead.get("lead_id", "")
+            if not lid or lid in existing:
+                continue
+            status = lead.get("status", "NEW")
+            if status not in ALL_STATUSES:
+                status = "NEW"
+            _insert(conn,
+                "INSERT INTO leads (tenant_id, lead_id, name, phone, purpose, budget, location_preference, timeline, status, source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (tid, lid, lead.get("name",""), lead.get("phone",""),
+                 lead.get("purpose",""), lead.get("budget",""),
+                 lead.get("location_preference",""), lead.get("timeline",""),
+                 status, "whatsapp", lead.get("created_at", datetime.now().isoformat())),
+            )
+            imported += 1
+        if imported:
+            print(f"[Restore] {imported} lead Supabase'den yüklendi")
+    finally:
+        _close(conn)
 
 
 def _init_pg(conn):
