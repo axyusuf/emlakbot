@@ -119,8 +119,8 @@ def _try_model(messages: list, model: str, custom_client=None) -> str | None:
         resp = target.chat.completions.create(
             model=model,
             messages=messages,
-            max_tokens=200,
-            timeout=15,
+            max_tokens=350,
+            timeout=20,
         )
         return resp.choices[0].message.content
     except Exception as e:
