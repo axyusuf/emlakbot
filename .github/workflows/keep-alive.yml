@@ -2,8 +2,8 @@ name: Keep Alive
 
 on:
   schedule:
-    - cron: '*/14 * * * *'  # Her 14 dakikada bir
-  workflow_dispatch:         # Manuel çalıştırma için
+    - cron: '*/5 * * * *'   # Her 5 dakikada bir (Render 15dk'da uyur, 5dk güvenli)
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -11,10 +11,13 @@ jobs:
     steps:
       - name: Ping EmlakBot
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://emlakbot-g25d.onrender.com/healthz)
-          echo "Site durumu: $STATUS"
-          if [ "$STATUS" = "200" ]; then
-            echo "Site aktif ve çalışıyor ✅"
-          else
-            echo "Site yanıt vermiyor ⚠️ (HTTP $STATUS)"
-          fi
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://emlakbot-g25d.onrender.com/healthz)
+            echo "Deneme $i - HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Site aktif ✅"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Site yanıt vermedi ⚠️"
