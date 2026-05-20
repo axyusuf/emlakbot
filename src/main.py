@@ -660,10 +660,11 @@ def _process_whatsapp_message(body: dict):
         append_message(tid, user_phone, "user", user_message)
         append_message(tid, user_phone, "assistant", ai_response)
 
-        # JSON kalifikasyon bloğu var mı?
-        json_match = re.search(r'\{[\s\S]*"status"[\s\S]*\}', ai_response)
+        # JSON kalifikasyon bloğu var mı? (her zaman sil — müşteriye asla gösterme)
+        json_match = re.search(r'\{[\s\S]*?"status"[\s\S]*?\}', ai_response)
         clean_response = ai_response
         if json_match:
+            clean_response = ai_response.replace(json_match.group(0), "").strip()
             try:
                 data = json.loads(json_match.group(0))
                 if data.get("status") == "QUALIFIED":
@@ -677,7 +678,6 @@ def _process_whatsapp_message(body: dict):
                         location_preference=data.get("location_preference", ""),
                         timeline=data.get("timeline", ""),
                     )
-                    clean_response = ai_response.replace(json_match.group(0), "").strip()
             except json.JSONDecodeError as e:
                 safe_print(f"JSON çözüm hatası: {e}")
 
