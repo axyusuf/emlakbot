@@ -49,6 +49,11 @@ GEMINI_MODELS = [
     "gemini-2.0-flash",
 ]
 
+# Gemini 2.5 thinking parametreleri
+GEMINI_EXTRA_PARAMS = {
+    "gemini-2.5-flash-preview-05-20": {"thinking_config": {"thinking_budget": 0}},
+}
+
 # Groq modelleri — yedek, günde 14.400 istek
 GROQ_MODELS = [
     "openai/gpt-oss-120b",
@@ -149,11 +154,13 @@ def _try_model(messages: list, model: str, custom_client=None) -> str | None:
     if target is None:
         return None
     try:
+        extra = GEMINI_EXTRA_PARAMS.get(model, {})
         resp = target.chat.completions.create(
             model=model,
             messages=messages,
-            max_tokens=350,
-            timeout=20,
+            max_tokens=500,
+            timeout=25,
+            extra_body=extra if extra else None,
         )
         return resp.choices[0].message.content
     except Exception as e:

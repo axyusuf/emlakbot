@@ -660,6 +660,9 @@ def _process_whatsapp_message(body: dict):
         append_message(tid, user_phone, "user", user_message)
         append_message(tid, user_phone, "assistant", ai_response)
 
+        # Thinking bloklarını temizle (<think>...</think> veya <thinking>...</thinking>)
+        ai_response = re.sub(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', '', ai_response, flags=re.IGNORECASE).strip()
+
         # JSON kalifikasyon bloğu var mı? (her zaman sil — müşteriye asla gösterme)
         json_match = re.search(r'\{[\s\S]*?"status"[\s\S]*?\}', ai_response)
         clean_response = ai_response
