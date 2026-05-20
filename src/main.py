@@ -686,6 +686,8 @@ def _process_whatsapp_message(body: dict):
         append_message(tid, user_phone, "user", user_message)
         append_message(tid, user_phone, "assistant", clean_response)
 
+        if not clean_response and json_match:
+            clean_response = "Bilgilerinizi not aldım, danışmanımız en kısa sürede sizinle iletişime geçecek. 🤝"
         if clean_response:
             send_whatsapp_message(
                 user_phone, clean_response,
