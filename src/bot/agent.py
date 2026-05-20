@@ -56,8 +56,6 @@ GEMINI_EXTRA_PARAMS = {
 
 # Groq modelleri — yedek, günde 14.400 istek
 GROQ_MODELS = [
-    "openai/gpt-oss-120b",
-    "qwen/qwen3-32b",
     "meta-llama/llama-4-scout-17b-16e-instruct",
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",

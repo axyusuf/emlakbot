@@ -656,37 +656,39 @@ def _process_whatsapp_message(body: dict):
         if not ai_response:
             return
 
-        # Geçmişi kaydet
-        append_message(tid, user_phone, "user", user_message)
-        append_message(tid, user_phone, "assistant", ai_response)
+        raw_response = ai_response  # Ham cevabı sakla (thinking + JSON içerebilir)
 
-        # Thinking bloklarını temizle (<think>...</think> veya <thinking>...</thinking>)
-        ai_response = re.sub(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', '', ai_response, flags=re.IGNORECASE).strip()
-
-        # JSON kalifikasyon bloğu var mı? (her zaman sil — müşteriye asla gösterme)
-        json_match = re.search(r'\{[\s\S]*?"status"[\s\S]*?\}', ai_response)
-        clean_response = ai_response
+        # 1. Kalifikasyon JSON'ı ham cevaptan çek (thinking bloğu içinde olsa bile)
+        json_match = re.search(r'\{[\s\S]*?"status"\s*:\s*"QUALIFIED"[\s\S]*?\}', raw_response)
         if json_match:
-            clean_response = ai_response.replace(json_match.group(0), "").strip()
             try:
                 data = json.loads(json_match.group(0))
-                if data.get("status") == "QUALIFIED":
-                    safe_print(f"[Tenant {tid}] Kalifikasyon: {data}")
-                    save_qualified_lead(
-                        tenant_id=tid,
-                        name=user_name,
-                        phone=user_phone,
-                        purpose=data.get("purpose", ""),
-                        budget=data.get("budget", ""),
-                        location_preference=data.get("location_preference", ""),
-                        timeline=data.get("timeline", ""),
-                    )
+                safe_print(f"[Tenant {tid}] Kalifikasyon: {data}")
+                save_qualified_lead(
+                    tenant_id=tid,
+                    name=user_name,
+                    phone=user_phone,
+                    purpose=data.get("purpose", ""),
+                    budget=data.get("budget", ""),
+                    location_preference=data.get("location_preference", ""),
+                    timeline=data.get("timeline", ""),
+                )
             except json.JSONDecodeError as e:
                 safe_print(f"JSON çözüm hatası: {e}")
 
-        if clean_response.strip():
+        # 2. Thinking bloklarını temizle
+        visible = re.sub(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', '', raw_response, flags=re.IGNORECASE).strip()
+
+        # 3. JSON bloğunu sil — müşteriye asla gösterme
+        clean_response = re.sub(r'\{[^{]*?"status"[\s\S]*', '', visible, flags=re.DOTALL).strip()
+
+        # Geçmişe temiz cevabı kaydet
+        append_message(tid, user_phone, "user", user_message)
+        append_message(tid, user_phone, "assistant", clean_response)
+
+        if clean_response:
             send_whatsapp_message(
-                user_phone, clean_response.strip(),
+                user_phone, clean_response,
                 token=settings.get("whatsapp_token"),
                 phone_id=settings.get("whatsapp_phone_id"),
             )
