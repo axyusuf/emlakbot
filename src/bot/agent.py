@@ -15,8 +15,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if GEMINI_API_KEY:
+    gemini_client = OpenAI(
+        api_key=GEMINI_API_KEY,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+else:
+    gemini_client = None
 
 if GROQ_API_KEY:
     groq_client = OpenAI(
@@ -34,13 +43,18 @@ if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "your_openrouter_api_key":
 else:
     client = None
 
-# Groq modelleri — ücretsiz, günde 14.400 istek
-GROQ_MODELS = [
-    "llama-3.3-70b-versatile", # Güçlü, Türkçe'de iyi
-    "llama-3.1-8b-instant",    # Yedek, hızlı
+# Gemini modelleri — birincil, günde 1.500 ücretsiz istek
+GEMINI_MODELS = [
+    "gemini-2.0-flash",  # Hızlı ve güçlü
 ]
 
-# OpenRouter yedek modelleri
+# Groq modelleri — yedek, günde 14.400 istek
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+]
+
+# OpenRouter son yedek
 FREE_MODELS = [
     "deepseek/deepseek-v4-flash:free",
     "google/gemma-4-31b-it:free",
@@ -148,7 +162,16 @@ def handle_message(
         "content": f"Misafirin Telefonu: {user_phone}. Mesajı: {user_message}",
     })
 
-    # Groq (birincil — hızlı, günde 14.400 istek)
+    # Gemini (birincil — güçlü, Türkçe'de en iyi)
+    if gemini_client:
+        for model in GEMINI_MODELS:
+            safe_print(f"Gemini deneniyor: {model}")
+            result = _try_model(messages, model, custom_client=gemini_client)
+            if result:
+                safe_print(f"Gemini başarılı: {model}")
+                return result
+
+    # Groq (yedek — günde 14.400 istek)
     if groq_client:
         for model in GROQ_MODELS:
             safe_print(f"Groq deneniyor: {model}")
@@ -157,7 +180,7 @@ def handle_message(
                 safe_print(f"Groq başarılı: {model}")
                 return result
 
-    # OpenRouter (yedek)
+    # OpenRouter (son yedek)
     if client:
         for model in FREE_MODELS:
             safe_print(f"OpenRouter deneniyor: {model}")
