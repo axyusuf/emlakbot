@@ -37,7 +37,6 @@ def save_qualified_lead(
         if client:
             try:
                 client.table("leads").insert({
-                    "tenant_id": tenant_id,
                     "lead_id": lead_id,
                     "name": name,
                     "phone": phone,
