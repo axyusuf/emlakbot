@@ -15,7 +15,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if GROQ_API_KEY:
+    groq_client = OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+    )
+else:
+    groq_client = None
 
 if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "your_openrouter_api_key":
     client = OpenAI(
@@ -25,23 +34,17 @@ if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "your_openrouter_api_key":
 else:
     client = None
 
-OLLAMA_CLIENT = OpenAI(
-    base_url="http://localhost:11434/v1",
-    api_key="ollama",
-)
-
-# OpenRouter'daki güncel ücretsiz model ID'leri (Mayıs 2026 itibarıyla doğrulanmış).
-# Hata verirlerse sıradakini deneriz, hepsi düşerse Ollama'ya geçer.
-# Sıra: hızlı/küçük → büyük/güçlü.
-FREE_MODELS = [
-    "deepseek/deepseek-v4-flash:free",                   # En hızlı
-    "google/gemma-4-26b-a4b-it:free",                    # Küçük, hızlı
-    "google/gemma-4-31b-it:free",                        # Türkçe'de iyi
-    "nvidia/nemotron-3-super-120b-a12b:free",            # Yedek
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", # Son yedek
+# Groq modelleri — hızlı, ücretsiz, günde 14.400 istek
+GROQ_MODELS = [
+    "llama-3.1-8b-instant",    # En hızlı
+    "llama-3.3-70b-versatile", # Yedek, daha güçlü
 ]
 
-OLLAMA_MODEL = "llama3"
+# OpenRouter yedek modelleri
+FREE_MODELS = [
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+]
 
 
 BASE_PROMPT_TEMPLATE = """
@@ -145,19 +148,22 @@ def handle_message(
         "content": f"Misafirin Telefonu: {user_phone}. Mesajı: {user_message}",
     })
 
-    # OpenRouter ücretsiz modelleri dene
-    if client:
-        for model in FREE_MODELS:
-            safe_print(f"Deneniyor: {model}")
-            result = _try_model(messages, model)
+    # Groq (birincil — hızlı, günde 14.400 istek)
+    if groq_client:
+        for model in GROQ_MODELS:
+            safe_print(f"Groq deneniyor: {model}")
+            result = _try_model(messages, model, custom_client=groq_client)
             if result:
-                safe_print(f"Başarılı: {model}")
+                safe_print(f"Groq başarılı: {model}")
                 return result
 
-    # Ollama fallback
-    safe_print(f"Ollama deneniyor: {OLLAMA_MODEL}")
-    result = _try_model(messages, OLLAMA_MODEL, custom_client=OLLAMA_CLIENT)
-    if result:
-        return result
+    # OpenRouter (yedek)
+    if client:
+        for model in FREE_MODELS:
+            safe_print(f"OpenRouter deneniyor: {model}")
+            result = _try_model(messages, model)
+            if result:
+                safe_print(f"OpenRouter başarılı: {model}")
+                return result
 
     return "Üzgünüm, şu an isteğinizi işleyemiyorum. Lütfen daha sonra tekrar deneyin."
