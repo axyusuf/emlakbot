@@ -35,7 +35,7 @@ from src.auth.routes import router as auth_router
 from src.auth.security import require_tenant, current_tenant_id
 from src.bot.agent import handle_message
 from src.bot.tools import save_qualified_lead
-from src.whatsapp.client import send_whatsapp_message
+from src.whatsapp.client import send_whatsapp_message, send_whatsapp_image, send_whatsapp_video
 from src.database.local_db import (
     init_db, get_tenant, get_tenant_settings, update_tenant_settings, update_tenant,
     find_tenant_by_whatsapp_phone_id, list_leads, get_lead, update_lead_status,
@@ -453,6 +453,27 @@ def settings_page(request: Request, saved: int = 0):
         for t in tones
     )
 
+    # Portföyü düzenlenebilir JSON olarak göster
+    media_library = s.get("media_library") or []
+    try:
+        media_library_json = json.dumps(media_library, ensure_ascii=False, indent=2)
+    except Exception:
+        media_library_json = "[]"
+
+    media_example = json.dumps([
+        {
+            "title": "Maslak Vadi 2+1 Lüks Daire",
+            "summary": "Yatırımlık, deniz manzaralı, site içi havuzlu, 95 m²",
+            "images": [
+                "https://ornek.com/maslak-salon.jpg",
+                "https://ornek.com/maslak-mutfak.jpg"
+            ],
+            "videos": [
+                "https://ornek.com/maslak-tur.mp4"
+            ]
+        }
+    ], ensure_ascii=False, indent=2)
+
     body = f"""
     <div class="container">
       <h1>Ayarlar</h1>
@@ -473,6 +494,15 @@ def settings_page(request: Request, saved: int = 0):
 
           <label>Ek talimatlar (opsiyonel)</label>
           <textarea name="system_prompt_extras" placeholder="Örn: Müşteriye projemizin sosyal alanlarından bahset...">{escape(s.get('system_prompt_extras',''))}</textarea>
+
+          <h2 style="margin-top:24px">Portföy (Foto / Video)</h2>
+          <p style="color:#666;font-size:13px;margin-bottom:8px">Bot, müşteri foto/video isterse veya bir mülkten bahsederse buradaki linkleri WhatsApp üzerinden gönderir. JSON formatında yaz:</p>
+          <textarea name="media_library" style="min-height:180px;font-family:Consolas,Monaco,monospace;font-size:12px" placeholder='[]'>{escape(media_library_json)}</textarea>
+          <details style="margin-top:8px">
+            <summary style="cursor:pointer;color:#1a1a2e;font-size:13px;font-weight:600">Örnek format (genişlet)</summary>
+            <pre style="background:#f4f5f9;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;margin-top:6px">{escape(media_example)}</pre>
+            <p style="color:#888;font-size:12px;margin-top:6px">URL'ler HTTPS olmalı, Meta erişebilmeli. Foto max 5MB (jpg/png), video max 16MB (mp4).</p>
+          </details>
 
           <h2 style="margin-top:24px">WhatsApp Bağlantısı</h2>
           <label>Meta WhatsApp Token</label>
@@ -535,6 +565,7 @@ def settings_save(
     phone: str = Form(""),
     bot_tone: str = Form("profesyonel"),
     system_prompt_extras: str = Form(""),
+    media_library: str = Form(""),
     whatsapp_token: str = Form(""),
     whatsapp_phone_id: str = Form(""),
 ):
@@ -542,9 +573,33 @@ def settings_save(
     update_tenant(tid, office_name.strip(), contact_name.strip(), phone.strip())
     settings = get_tenant_settings(tid)
     new_token = whatsapp_token.strip()
+
+    # Portföy JSON'ını parse et — bozuksa eskisini koru
+    media_library_clean = settings.get("media_library") or []
+    if media_library.strip():
+        try:
+            parsed = json.loads(media_library)
+            if isinstance(parsed, list):
+                # Sadece dict girişleri tut, URL'leri sağlamlaştır
+                media_library_clean = []
+                for item in parsed:
+                    if not isinstance(item, dict):
+                        continue
+                    media_library_clean.append({
+                        "title": str(item.get("title", "")).strip(),
+                        "summary": str(item.get("summary", "")).strip(),
+                        "images": [str(u).strip() for u in (item.get("images") or []) if str(u).strip()],
+                        "videos": [str(u).strip() for u in (item.get("videos") or []) if str(u).strip()],
+                    })
+        except json.JSONDecodeError:
+            safe_print(f"[Tenant {tid}] Portföy JSON parse hatası, eski portföy korundu.")
+    else:
+        media_library_clean = []
+
     settings.update({
         "bot_tone": bot_tone,
         "system_prompt_extras": system_prompt_extras.strip(),
+        "media_library": media_library_clean,
         "whatsapp_token": new_token,
         "whatsapp_phone_id": whatsapp_phone_id.strip(),
     })
@@ -679,7 +734,23 @@ def _process_whatsapp_message(body: dict):
         # 2. Thinking bloklarını temizle
         visible = re.sub(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', '', raw_response, flags=re.IGNORECASE).strip()
 
-        # 3. JSON bloğunu sil — müşteriye asla gösterme
+        # 3. Medya tag'lerini ayıkla — [[SEND_IMAGE|url|caption]] / [[SEND_VIDEO|url|caption]]
+        # Bot portföyden uygun olanı seçtiyse, tag'i metinden çıkar, ayrıca gönder.
+        media_pattern = re.compile(
+            r'\[\[\s*SEND_(IMAGE|VIDEO)\s*\|\s*([^\|\]]+?)\s*(?:\|\s*([^\]]*?)\s*)?\]\]',
+            re.IGNORECASE,
+        )
+        media_sends: list[tuple[str, str, str]] = []  # (kind, url, caption)
+        for m in media_pattern.finditer(visible):
+            kind = m.group(1).upper()
+            url = (m.group(2) or "").strip()
+            caption = (m.group(3) or "").strip()
+            if url.lower().startswith(("http://", "https://")):
+                media_sends.append((kind, url, caption))
+        # Tag'leri görünür metinden temizle
+        visible = media_pattern.sub("", visible).strip()
+
+        # 4. Kalifikasyon JSON bloğunu sil — müşteriye asla gösterme
         clean_response = re.sub(r'\{[^{]*?"status"[\s\S]*', '', visible, flags=re.DOTALL).strip()
 
         # Geçmişe temiz cevabı kaydet
@@ -694,6 +765,26 @@ def _process_whatsapp_message(body: dict):
                 token=settings.get("whatsapp_token"),
                 phone_id=settings.get("whatsapp_phone_id"),
             )
+
+        # Medyaları metinden sonra gönder (max 3, kötü niyetli loop'a karşı)
+        for kind, url, caption in media_sends[:3]:
+            try:
+                if kind == "IMAGE":
+                    send_whatsapp_image(
+                        user_phone, url, caption=caption,
+                        token=settings.get("whatsapp_token"),
+                        phone_id=settings.get("whatsapp_phone_id"),
+                    )
+                else:  # VIDEO
+                    send_whatsapp_video(
+                        user_phone, url, caption=caption,
+                        token=settings.get("whatsapp_token"),
+                        phone_id=settings.get("whatsapp_phone_id"),
+                    )
+                append_message(tid, user_phone, "assistant", f"[{kind}] {url} ({caption})")
+                safe_print(f"[Tenant {tid}] Medya gönderildi: {kind} {url}")
+            except Exception as e:
+                safe_print(f"Medya gönderme hatası ({kind} {url}): {e}")
 
     except Exception as e:
         safe_print(f"Mesaj işleme hatası: {e}")
