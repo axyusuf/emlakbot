@@ -9,9 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Render deploy tetikle
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           curl -s -X POST \
-            -H "Authorization: Bearer rnd_WZOvZc3xYnRWxmvN80wQWQwYinmM" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{"clearCache":"do_not_clear"}' \
             https://api.render.com/v1/services/srv-d868jcp9rddc73f34bfg/deploys
