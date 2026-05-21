@@ -519,41 +519,27 @@ def settings_page(request: Request, saved: int = 0):
     return HTMLResponse(_shell("Ayarlar", body, tenant))
 
 
-def _sync_token_to_render(new_token: str):
+def _sync_env_var_to_render(key: str, value: str):
+    """Tek bir env var'i Render'da gunceller veya olusturur (single-key PUT)."""
     api_key = os.getenv("RENDER_API_KEY")
     service_id = os.getenv("RENDER_SERVICE_ID")
     if not api_key or not service_id:
         return
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get(
-                f"https://api.render.com/v1/services/{service_id}/env-vars",
+            resp = client.put(
+                f"https://api.render.com/v1/services/{service_id}/env-vars/{key}",
                 headers={"Authorization": f"Bearer {api_key}"},
+                json={"value": value},
             )
-            if resp.status_code != 200:
-                return
-            items = resp.json()
-            put_vars = []
-            found = False
-            for item in items:
-                ev = item.get("envVar", item)
-                key = ev.get("key", "")
-                val = ev.get("value", "")
-                if key == "WHATSAPP_TOKEN":
-                    put_vars.append({"key": key, "value": new_token})
-                    found = True
-                else:
-                    put_vars.append({"key": key, "value": val})
-            if not found:
-                put_vars.append({"key": "WHATSAPP_TOKEN", "value": new_token})
-            resp2 = client.put(
-                f"https://api.render.com/v1/services/{service_id}/env-vars",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json=put_vars,
-            )
-            safe_print(f"Render token sync: {resp2.status_code}")
+            safe_print(f"Render env sync [{key}]: {resp.status_code}")
     except Exception as e:
-        safe_print(f"Render token sync hatası: {e}")
+        safe_print(f"Render env sync hatasi [{key}]: {e}")
+
+
+def _sync_token_to_render(new_token: str):
+    """Geriye uyumluluk - WHATSAPP_TOKEN'i Render'a yazar."""
+    _sync_env_var_to_render("WHATSAPP_TOKEN", new_token)
 
 
 @app.post("/app/settings")
@@ -604,8 +590,16 @@ def settings_save(
         "whatsapp_phone_id": whatsapp_phone_id.strip(),
     })
     update_tenant_settings(tid, settings)
+
+    # Render env var'larini guncelle ki ephemeral SQLite restart sonrasi geri yuklesin
     if new_token:
-        background_tasks.add_task(_sync_token_to_render, new_token)
+        background_tasks.add_task(_sync_env_var_to_render, "WHATSAPP_TOKEN", new_token)
+    background_tasks.add_task(_sync_env_var_to_render, "DEFAULT_SYSTEM_PROMPT_EXTRAS", system_prompt_extras.strip())
+    background_tasks.add_task(
+        _sync_env_var_to_render,
+        "DEFAULT_MEDIA_LIBRARY",
+        json.dumps(media_library_clean, ensure_ascii=False),
+    )
     return RedirectResponse("/app/settings?saved=1", status_code=303)
 
 

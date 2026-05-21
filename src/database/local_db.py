@@ -154,14 +154,27 @@ def _auto_seed_default_tenant():
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     tid = create_tenant(email=email, password_hash=pw_hash, office_name=office_name)
+
+    # Portföyü env'den (JSON string) yükle — ephemeral disk'te restart sonrası kalıcılık için
+    media_library = []
+    raw_lib = os.getenv("DEFAULT_MEDIA_LIBRARY", "").strip()
+    if raw_lib:
+        try:
+            parsed = json.loads(raw_lib)
+            if isinstance(parsed, list):
+                media_library = parsed
+        except json.JSONDecodeError as e:
+            print(f"[AutoSeed] DEFAULT_MEDIA_LIBRARY parse hatasi (yok sayildi): {e}")
+
     settings = {
         "whatsapp_phone_id": os.getenv("WHATSAPP_PHONE_ID", ""),
         "whatsapp_token": os.getenv("WHATSAPP_TOKEN", ""),
         "bot_tone": "samimi",
         "system_prompt_extras": os.getenv("DEFAULT_SYSTEM_PROMPT_EXTRAS", ""),
+        "media_library": media_library,
     }
     update_tenant_settings(tid, settings)
-    print(f"[AutoSeed] Tenant oluşturuldu: {email} / {password}")
+    print(f"[AutoSeed] Tenant oluşturuldu: {email} / {password} (portföy {len(media_library)} mülk)")
 
 
 def _restore_leads_from_supabase():
